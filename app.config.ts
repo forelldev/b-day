@@ -24,8 +24,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     predictiveBackGestureEnabled: false,
     allowBackup: true,
 
+    // El fondo del icono adaptativo debe coincidir con el fondo blanco de
+    // `icon.png`: si no, los lanzadores Android 8+ (que usan el adaptativo)
+    // mostrarían un color distinto del que ven los lanzadores antiguos.
     adaptiveIcon: {
-      backgroundColor: BRAND,
+      backgroundColor: '#FFFFFF',
       foregroundImage: './assets/android-icon-foreground.png',
       monochromeImage: './assets/android-icon-monochrome.png',
     },

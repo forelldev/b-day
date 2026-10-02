@@ -15,9 +15,12 @@ import {
   OFFSETS,
   OFFSETS_SOLO_HOY,
   cumpleanerosParaCelebrar,
+  edadEnCumpleDelAviso,
   fechaLarga,
   instanteRecordatorioSiguienteCiclo,
+  pluralAnios,
   proximoInstanteRecordatorio,
+  textoEdadAviso,
   type OffsetDias,
 } from '../utils/date';
 
@@ -43,34 +46,49 @@ function nombreCompleto(c: Cumpleanero): string {
   return `${c.nombre} ${c.apellido}`;
 }
 
-/** Texto de cada aviso según los días que faltan. */
+/**
+ * Texto de cada aviso según los días que faltan, con la edad que se cumple en
+ * ese cumpleaños concreto.
+ *
+ * Cuando el año guardado no permite deducir una edad (es el año actual o
+ * posterior) se conserva el texto sin cifras en lugar de inventar una.
+ */
 function redactar(
   c: Cumpleanero,
   offset: OffsetDias,
   instante: Date,
 ): { titulo: string; cuerpo: string } {
   const quien = nombreCompleto(c);
+  const edad = edadEnCumpleDelAviso(c.fechaNacimiento, instante, offset, c.anioDesconocido);
+  const frase = textoEdadAviso(edad, offset);
+  // La frase de la edad va en su propia oración detrás de la principal.
+  const cierre = (base: string) => (frase ? `${base}. ${frase}.` : `${base}.`);
+
   switch (offset) {
     case -2:
       return {
         titulo: 'Faltan 2 días',
-        cuerpo: `El ${fechaLarga(instante)} cumple años ${quien}.`,
+        cuerpo: cierre(`El ${fechaLarga(instante)} cumple años ${quien}`),
       };
     case -1:
       return {
         titulo: '¡Mañana cumple años!',
-        cuerpo: `${quien} cumple años mañana, ${fechaLarga(instante)}.`,
+        cuerpo: cierre(`${quien} cumple años mañana, ${fechaLarga(instante)}`),
       };
     case 0:
       return {
         titulo: '¡Hoy cumple años!',
-        cuerpo: `¡Felicita a ${quien}! Hoy es su cumpleaños.`,
+        cuerpo: cierre(`¡Felicita a ${quien}! Hoy es su cumpleaños`),
       };
-    case 1:
+    case 1: {
+      // Aquí la edad sustituye a "años" dentro de la frase, porque repetir
+      // "cumplió años ayer. Cumplió 24 años." sonaría mal.
+      const n = edad === null ? 'años' : pluralAnios(edad);
       return {
         titulo: 'Felicitación tardía',
-        cuerpo: `${quien} cumplió años ayer. ¡Todavía estás a tiempo de felicitarle!`,
+        cuerpo: `${quien} cumplió ${n} ayer. ¡Todavía estás a tiempo de felicitarle!`,
       };
+    }
   }
 }
 

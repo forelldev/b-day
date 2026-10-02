@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { esBisiesto, parseFechaCumple, formatearFechaCumple, proximoCumple } from '../src/utils/date.ts';
+import { ANIO_MINIMO, anioMaximo } from '../src/ui/limitesAnio.ts';
 
 /**
  * Lógica del selector de cumpleaños: el día se recorta al último que existe en
@@ -80,4 +81,13 @@ test('proximoCumple funciona con años futuros', () => {
   assert.equal(cumple.getMonth(), 6);
   assert.equal(cumple.getDate(), 20);
   assert.ok(cumple.getFullYear() >= new Date().getFullYear());
+});
+
+test('el selector de año no ofrece años posteriores al actual', () => {
+  // Nadie nace en el futuro. Además, un año a futuro deja la edad en blanco
+  // porque no sale ninguna edad deducible de él.
+  const actual = new Date().getFullYear();
+  assert.equal(anioMaximo(), actual);
+  assert.ok(anioMaximo() < actual + 1);
+  assert.ok(ANIO_MINIMO < actual);
 });

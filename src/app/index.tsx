@@ -10,7 +10,12 @@ import { useNotificaciones } from '../estado/NotificacionesProvider';
 import { confirmarBorrado } from '../utils/borrar';
 import { useTema } from '../estado/TemaProvider';
 import { ESPACIO, RADIO, colorPorUrgencia, iniciales , type Colores } from '../ui/tema';
-import { fechaCorta, textoCuentaAtras } from '../utils/date';
+import {
+  fechaCorta,
+  semanaDelCumple,
+  textoCuentaAtras,
+  textoEdadTarjeta,
+} from '../utils/date';
 import { AvisoPermisos } from '../ui/AvisoPermisos';
 import { abrirAjustesNotificaciones } from '../notifications/permisos';
 
@@ -19,7 +24,7 @@ export default function PantallaLista() {
   const styles = React.useMemo(() => crearEstilos(colores), [colores]);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { cumpleaneros, cargando, error, recargar } = useCumpleaneros();
+  const { cumpleaneros, ahora, cargando, error, recargar } = useCumpleaneros();
   const { permiso, avisosActivos, pedirPermisoAhora, sincronizar } = useNotificaciones();
 
   // Al volver del formulario la lista se recarga, así la cuenta atrás y la
@@ -30,11 +35,18 @@ export default function PantallaLista() {
     }, [recargar]),
   );
 
+  // Las semanas van de lunes a domingo. "Esta semana" incluye hoy, que ya
+  // cuenta aparte en el texto, y se detiene en el domingo: contar los próximos
+  // siete días metía en esta semana el lunes siguiente.
   const resumen = useMemo(() => {
-    const hoy = cumpleaneros.filter((c) => c.dias === 0);
-    const semana = cumpleaneros.filter((c) => c.dias > 0 && c.dias <= 7);
-    return { hoy: hoy.length, semana: semana.length };
-  }, [cumpleaneros]);
+    const cuenta = { hoy: 0, esta: 0, proxima: 0, masAdelante: 0 };
+    // Mientras no haya lista cargada no hay nada que contar.
+    if (!ahora) return cuenta;
+    for (const c of cumpleaneros) {
+      cuenta[semanaDelCumple(c.dias, ahora)] += 1;
+    }
+    return cuenta;
+  }, [cumpleaneros, ahora]);
 
   return (
     <View style={styles.pantalla}>
@@ -75,14 +87,14 @@ export default function PantallaLista() {
             )}
             {cumpleaneros.length > 0 && (
               <Text style={styles.resumen}>
-                {resumen.hoy > 0
-                  ? `${resumen.hoy} cumpleaños hoy · `
+                {resumen.hoy > 0 ? `${resumen.hoy} cumpleaños hoy` : ''}
+                {resumen.hoy > 0 && (resumen.esta > 0 || resumen.proxima > 0) ? ' · ' : ''}
+                {resumen.esta > 0 ? `${resumen.esta} esta semana` : ''}
+                {resumen.esta > 0 && resumen.proxima > 0 ? ' · ' : ''}
+                {resumen.proxima > 0 ? `${resumen.proxima} la próxima semana` : ''}
+                {resumen.hoy === 0 && resumen.esta === 0 && resumen.proxima === 0
+                  ? 'Nadie cumple años en las próximas dos semanas'
                   : ''}
-                {resumen.semana > 0
-                  ? `${resumen.semana} esta semana`
-                  : resumen.hoy === 0
-                    ? 'Nadie cumple años en los próximos 7 días'
-                    : ''}
               </Text>
             )}
           </View>
@@ -145,21 +157,6 @@ export default function PantallaLista() {
   );
 }
 
-/**
- * "34 años · Cumplirá 35". Se muestran las dos porque la edad que tiene hoy y
- * la que va a cumplir en el próximo cumpleaños no siempre coinciden: si el de
- * este año ya pasó, la segunda es una mayor.
- */
-function textoEdad(edad: number | null): string {
-  if (edad === null) return '';
-  return `${años(edad)} · Cumplirá ${años(edad + 1)}`;
-}
-
-/** "1 año" o "34 años". */
-function años(n: number): string {
-  return `${n} ${n === 1 ? 'año' : 'años'}`;
-}
-
 function TarjetaCumpleanero({
   cumpleanero,
   alPulsar,
@@ -181,7 +178,7 @@ function TarjetaCumpleanero({
       accessibilityRole="button"
       accessibilityLabel={[
         `${cumpleanero.nombre} ${cumpleanero.apellido}`,
-        edad !== null ? textoEdad(edad) : null,
+        edad !== null ? textoEdadTarjeta(edad, dias) : null,
         textoCuentaAtras(dias),
       ]
         .filter(Boolean)
@@ -205,7 +202,17 @@ function TarjetaCumpleanero({
             {fechaCorta(cumpleanero.fechaNacimiento)}
             {cumpleanero.notas ? ` · ${cumpleanero.notas}` : ''}
           </Text>
-          {edad !== null && <Text style={styles.edad}>{textoEdad(edad)}</Text>}
+          {edad !== null ? (
+            <Text style={styles.edad}>{textoEdadTarjeta(edad, dias)}</Text>
+          ) : cumpleanero.anioDesconocido ? (
+            /* El usuario dejó claro que no conoce el año. Decirlo es mejor que
+               dejar la línea en blanco, que parece un fallo. */
+            <Text style={styles.sinAnio}>Año de nacimiento desconocido</Text>
+          ) : (
+            /* Hay edad pero no se ha podido calcular: el año guardado es
+               posterior a hoy, lo cual es un dato imposible. */
+            <Text style={styles.sinAnio}>Revisa el año de nacimiento</Text>
+          )}
         </View>
 
         {/* Zona aparte para no disparar la apertura de la ficha al borrar. */}
@@ -270,6 +277,9 @@ function crearEstilos(colores: Colores) {
   nombre: { fontSize: 16, fontWeight: '700', color: colores.texto },
   detalle: { fontSize: 13, color: colores.textoSuave },
   edad: { fontSize: 13, color: colores.textoSuave, fontWeight: '600' },
+  // Aviso de que falta el año: en tono suave, no en color de error, porque no
+  // es un fallo sino algo que el usuario puede completar cuando quiera.
+  sinAnio: { fontSize: 12, color: colores.textoSuave, fontStyle: 'italic' },
   pastilla: {
     paddingHorizontal: ESPACIO.md,
     paddingVertical: ESPACIO.xs + 2,

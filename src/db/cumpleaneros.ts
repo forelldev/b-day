@@ -6,6 +6,13 @@ export interface Cumpleanero {
   apellido: string;
   /** `YYYY-MM-DD` */
   fechaNacimiento: string;
+  /**
+   * `true` cuando quien la anotó no conocía el año de nacimiento y solo
+   * matteredía el día y el mes. Distingue eso de un bebé que sí nació este año:
+   * en ambos casos el año guardado es el en curso, pero solo en el primero
+   * falta la edad.
+   */
+  anioDesconocido: boolean;
   notas: string | null;
   creadoEn: string;
   actualizadoEn: string;
@@ -16,13 +23,14 @@ interface FilaCumpleanero {
   nombre: string;
   apellido: string;
   fecha_nacimiento: string;
+  anio_desconocido: number;
   notas: string | null;
   creado_en: string;
   actualizado_en: string;
 }
 
 const SELECT = `
-  SELECT id, nombre, apellido, fecha_nacimiento, notas, creado_en, actualizado_en
+  SELECT id, nombre, apellido, fecha_nacimiento, anio_desconocido, notas, creado_en, actualizado_en
   FROM cumpleaneros
 `;
 
@@ -32,6 +40,7 @@ function aCumpleanero(fila: FilaCumpleanero): Cumpleanero {
     nombre: fila.nombre,
     apellido: fila.apellido,
     fechaNacimiento: fila.fecha_nacimiento,
+    anioDesconocido: fila.anio_desconocido === 1,
     notas: fila.notas,
     creadoEn: fila.creado_en,
     actualizadoEn: fila.actualizado_en,
@@ -75,6 +84,7 @@ export interface DatosCumpleanero {
   apellido: string;
   /** `YYYY-MM-DD` */
   fechaNacimiento: string;
+  anioDesconocido?: boolean;
   notas?: string | null;
 }
 
@@ -83,11 +93,12 @@ export async function crearCumpleanero(datos: DatosCumpleanero): Promise<number>
   const db = await obtenerDb();
   const sello = ahoraIso();
   const resultado = await db.runAsync(
-    `INSERT INTO cumpleaneros (nombre, apellido, fecha_nacimiento, notas, creado_en, actualizado_en)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO cumpleaneros (nombre, apellido, fecha_nacimiento, anio_desconocido, notas, creado_en, actualizado_en)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
     normalizar(datos.nombre),
     normalizar(datos.apellido),
     datos.fechaNacimiento,
+    datos.anioDesconocido ? 1 : 0,
     datos.notas?.trim() ? datos.notas.trim() : null,
     sello,
     sello,
@@ -100,11 +111,12 @@ export async function actualizarCumpleanero(id: number, datos: DatosCumpleanero)
   const db = await obtenerDb();
   const resultado = await db.runAsync(
     `UPDATE cumpleaneros
-        SET nombre = ?, apellido = ?, fecha_nacimiento = ?, notas = ?, actualizado_en = ?
+        SET nombre = ?, apellido = ?, fecha_nacimiento = ?, anio_desconocido = ?, notas = ?, actualizado_en = ?
       WHERE id = ?`,
     normalizar(datos.nombre),
     normalizar(datos.apellido),
     datos.fechaNacimiento,
+    datos.anioDesconocido ? 1 : 0,
     datos.notas?.trim() ? datos.notas.trim() : null,
     ahoraIso(),
     id,

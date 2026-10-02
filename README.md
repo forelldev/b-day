@@ -83,9 +83,51 @@ El selector de la fecha está en español: eliges el mes y el día con el calend
 una lista aparte. El año vale cualquiera: si no sabes el de nacimiento, pon el que te salga, por
 ejemplo 2026, porque para los recordatorios solo importan el día y el mes.
 
-Cada tarjeta de la lista muestra el nombre, la fecha de nacimiento, los años que tiene hoy
-seguidos de los que cumplirá (*23 años · Cumplirá 24*) y cuántos días faltan para el próximo. La edad no aparece si el año guardado es el actual o posterior, porque en
-ese caso el año se anotó sin saberlo y la edad sería inventada.
+Cada tarjeta de la lista muestra el nombre, la fecha de nacimiento, la edad que tiene hoy
+seguida de la que cumplirá en el próximo cumpleaños (`Edad: 23 años · Cumplirá: 24 años`) y
+cuántos días faltan para el próximo.
+
+Las dos cifras no siempre coinciden: si el cumpleaños de este año ya pasó, la siguiente es un año
+mayor.
+
+### El resumen de la cabecera cuenta semanas naturales
+
+Arriba, encima de la lista, la app indica cuántos cumpleaños caen hoy, esta semana y la próxima.
+Las semanas van **de lunes a domingo**, como se lee un calendario en español, no de siete en siete
+días.
+
+La diferencia importa. Si hoy es lunes, el lunes siguiente está a siete días pero pertenece a
+la semana que viene, así que cuenta como "la próxima semana" y no como "esta". Contar los próximos
+siete días metería ahí a quien no es de esta semana.
+
+Quien cumple hoy va en su propio dato (`2 cumpleaños hoy`) y el resto de la semana en `esta semana`,
+de forma que ningún número se repite en la misma línea. Sumando los dos sale el total de la semana
+en curso.
+
+### Por qué la edad puede no aparecer
+
+La edad se deduce del **año de nacimiento**, así que solo se muestra cuando ese año sirve para
+calcularla. El selector de fechas ofrece años entre 1900 y el año en curso: nadie nace en el
+futuro, así que no tiene sentido apuntar 2027 o 2036. Los cumpleaños son recurrentes, de modo que para
+un cumpleaños solo importan el día y el mes. Por eso se puede anotar a alguien sin saber su año de
+nacimiento: la app funciona igual, avisa igual, y simplemente no muestra la edad.
+
+Para distinguir los dos casos, la ficha tiene una casilla **"No conozco el año de nacimiento"**, que
+viene marcada por defecto:
+
+- **Marcada**: solo se guardan el día y el mes. La lista muestra *Año de nacimiento desconocido* y los
+  avisos no llevan cifras. El recordatorio funciona exactamente igual.
+- **Desmarcada**: el año es real, y la edad se muestra aunque valga `0 años`, que es lo que cumple
+  un bebé nacido este año. Antes esa edad se ocultaba siempre, y era un error: un cumpleaños de 0
+  años es tan real como cualquier otro.
+
+Es una decisión a conciencia: es preferible no mostrar la edad antes que inventar una. Alguien que
+anota el día y el mes sin saber el año vería `Edad: 0 años`, que sería un dato falso; quien sí lo
+sabe y dejó la casilla desmarcada lo ve correctamente.
+
+La línea de edad también cambia de verbo según el momento: `Edad: 26 años · Cumplirá: 27 años` si
+falta más de un día, `Está cumpliendo 27 años` si es hoy y `Cumplió 27 años` si fue ayer. Los avisos
+llevan la misma cifra, calculada para el cumpleaños al que pertenecen.
 
 **Editar.** Toca cualquier tarjeta de la lista. Desde la ficha puedes cambiar los datos, añadir
 notas o eliminar el registro.
@@ -290,7 +332,7 @@ SDK de Android y un dispositivo conectado por USB con depuración activada.
 npm test
 ```
 
-79 tests con el runner nativo de Node (`node --test`), sin dependencias extra. No necesitan
+89 tests con el runner nativo de Node (`node --test`), sin dependencias extra. No necesitan
 emulador ni dispositivo.
 
 Cubren lo que de verdad puede fallar en una app de cumpleaños:

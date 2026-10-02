@@ -4,23 +4,13 @@ import Feather from '@expo/vector-icons/Feather';
 import { ESPACIO, RADIO, textoSobre, type Colores } from './tema';
 import { useTema } from '../estado/TemaProvider';
 import { MESES, fechaLargaConAnio } from '../utils/date';
+import { ANIO_MINIMO, anioMaximo } from './limitesAnio';
 
 /** Abreviaturas de tres letras para la cabecera del calendario. */
 const MESES_CORTOS = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
 
 /** Días de la semana empezando en lunes, que es como se lee un calendario en español. */
 const DIAS_SEMANA = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-
-export const ANIO_MINIMO = 1900;
-
-/**
- * Último año de la lista. Va algunos años por delante del actual porque la
- * fecha es un cumpleaños y puede que se apunte el año de otra persona, pero no
- * tanto que la lista deje de ser manejable.
- */
-export function anioMaximo(): number {
-  return new Date().getFullYear() + 10;
-}
 
 interface Props {
   etiqueta: string;
@@ -61,11 +51,15 @@ export function SelectorFechaCumple({ etiqueta, valor, alCambiar }: Props) {
     [alCambiar],
   );
 
+  // La lista llega hasta el año en curso, pero si la ficha ya tiene guardado un
+  // año mayor (se podía elegir antes de este cambio) se incluye igual: quitarlo
+  // dejaría el valor guardado sin forma de verse ni de corregirse.
   const años = React.useMemo(() => {
     const lista: number[] = [];
-    for (let a = anioMaximo(); a >= ANIO_MINIMO; a--) lista.push(a);
+    const tope = Math.max(anioMaximo(), anio);
+    for (let a = tope; a >= ANIO_MINIMO; a--) lista.push(a);
     return lista;
-  }, []);
+  }, [anio]);
 
   const primerDiaDelMes = new Date(anio, mes, 1).getDay();
   // `getDay` gives 0 for Sunday; the week starts on Monday, so Sunday becomes 6.

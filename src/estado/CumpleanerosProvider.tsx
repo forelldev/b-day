@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { listarCumpleaneros, type Cumpleanero } from '../db/cumpleaneros';
-import { diasParaCumple, edadActual } from '../utils/date';
+import { diasParaCumple, edadDeducible } from '../utils/date';
 
 export interface CumpleaneroConCuenta extends Cumpleanero {
   /** Días hasta el próximo cumpleaños (0 = hoy). */
@@ -11,6 +11,13 @@ export interface CumpleaneroConCuenta extends Cumpleanero {
 
 interface ValorContexto {
   cumpleaneros: CumpleaneroConCuenta[];
+  /**
+   * Instante con el que se calcularon `dias` y `edad`. Cualquier pantalla que
+   * agrupe por semana tiene que usar este mismo, no un `new Date()` aparte: si
+   * no, alrededor de medianoche una tarjeta puede decir "mañana" y clasificarse
+   * en la semana siguiente.
+   */
+  ahora: Date | null;
   cargando: boolean;
   error: string | null;
   recargar: () => Promise<void>;
@@ -30,16 +37,17 @@ function comparar(a: CumpleaneroConCuenta, b: CumpleaneroConCuenta): number {
 }
 
 /** Lectura de la base de datos y cálculo de la cuenta atrás y la edad. */
-async function cargarLista(): Promise<CumpleaneroConCuenta[]> {
+async function cargarLista(): Promise<{ lista: CumpleaneroConCuenta[]; ahora: Date }> {
   const filas = await listarCumpleaneros();
   const ahora = new Date();
-  return filas
+  const lista = filas
     .map((c) => ({
       ...c,
       dias: diasParaCumple(c.fechaNacimiento, ahora),
-      edad: edadActual(c.fechaNacimiento, ahora),
+      edad: edadDeducible(c.fechaNacimiento, c.anioDesconocido, ahora),
     }))
     .sort(comparar);
+  return { lista, ahora };
 }
 
 /**
@@ -49,12 +57,15 @@ async function cargarLista(): Promise<CumpleaneroConCuenta[]> {
  */
 export function ProveedorCumpleaneros({ children }: { children: React.ReactNode }) {
   const [cumpleaneros, setCumpleaneros] = useState<CumpleaneroConCuenta[]>([]);
+  const [ahora, setAhora] = useState<Date | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const recargar = useCallback(async () => {
     try {
-      setCumpleaneros(await cargarLista());
+      const { lista, ahora: instante } = await cargarLista();
+      setCumpleaneros(lista);
+      setAhora(instante);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -68,9 +79,10 @@ export function ProveedorCumpleaneros({ children }: { children: React.ReactNode 
     let vivo = true;
     void (async () => {
       try {
-        const lista = await cargarLista();
+        const { lista, ahora: instante } = await cargarLista();
         if (!vivo) return;
         setCumpleaneros(lista);
+        setAhora(instante);
         setError(null);
       } catch (e) {
         if (vivo) setError(e instanceof Error ? e.message : String(e));
@@ -84,8 +96,8 @@ export function ProveedorCumpleaneros({ children }: { children: React.ReactNode 
   }, []);
 
   const valor = useMemo<ValorContexto>(
-    () => ({ cumpleaneros, cargando, error, recargar }),
-    [cumpleaneros, cargando, error, recargar],
+    () => ({ cumpleaneros, ahora, cargando, error, recargar }),
+    [cumpleaneros, ahora, cargando, error, recargar],
   );
 
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;

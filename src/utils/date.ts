@@ -111,19 +111,40 @@ export function edadEnProximoCumple(fecha: string, desde: Date = new Date()): nu
 /**
  * Edad que tiene hoy, que no es lo mismo que la que cumple en el próximo
  * cumpleaños: si el cumpleaños ya pasó este año, esa cuenta da un año más.
- * Devuelve `null` cuando el año guardado no sirve para deducir una edad, es
- * decir cuando es el año actual o posterior, porque entonces quien lo anotó no
- * conocía el año de nacimiento real.
+ *
+ * Devuelve `null` solo si el año de nacimiento es posterior al actual, que es
+ * un dato imposible. Un año igual al actual es una edad legítima de 0 años: un
+ * bebé que nació este año tiene un cumpleaños real, y quien no conoce el año
+ *birthday se marca aparte con `anioDesconocido`, no se deduce de la cifra.
  */
 export function edadActual(fecha: string, desde: Date = new Date()): number | null {
   const { anio, mes, dia } = parseFechaCumple(fecha);
   const base = inicioDelDia(desde);
-  if (anio >= base.getFullYear()) return null;
+  if (anio > base.getFullYear()) return null;
   let edad = base.getFullYear() - anio;
   // Todavía no ha cumplido este año: le falta uno.
   const cumpleEsteAnio = mes < base.getMonth() + 1 || (mes === base.getMonth() + 1 && dia <= base.getDate());
   if (!cumpleEsteAnio) edad -= 1;
-  return edad;
+  // Un bebé nacido este año tiene edad 0, no -1: si su cumpleaños aún no ha
+  // llegado, esa resta lo dejaría en negativo.
+  return Math.max(0, edad);
+}
+
+/**
+ * Edad deducible a partir del año guardado.
+ *
+ * Es `edadActual` con el matiz del año desconocido: si quien anotó la ficha
+ * dejó claro que no conoce el año, no hay nada que deducir aunque la cifra sea
+ * válida. Sin este matiz, una ficha marcada como desconocida seguiría enseñando
+ * `0 años`, que es justo el dato falso que se quiere evitar.
+ */
+export function edadDeducible(
+  fecha: string,
+  anioDesconocido: boolean,
+  desde: Date = new Date(),
+): number | null {
+  if (anioDesconocido) return null;
+  return edadActual(fecha, desde);
 }
 
 /**
@@ -328,6 +349,113 @@ export function necesitaReconstruirAgenda(
   const diaNuevo = diaUltimo !== diaAhora;
   const cambioZona = zonaUltima !== null && zonaUltima !== zonaAhora;
   return { diaNuevo, cambioZona, reconstruir: diaNuevo || cambioZona };
+}
+
+/**
+ * Texto de la edad en la lista, adaptado a lo cerca que esté el cumpleaños.
+ *
+ * - No es ni hoy ni ayer: "Edad: 23 años · Cumplirá: 24 años". Se muestran las
+ *   dos cifras porque no siempre coinciden.
+ * - Es hoy: "Está cumpliendo 24 años". Aquí `edad` ya es la que se cumple
+ *   este mismo día, así que no se le suma uno.
+ * - Fue ayer: "Cumplió 24 años".
+ *
+ * `dias` negativo solo llega desde el resumen, que sí cuenta hacia atrás.
+ *
+ * Devuelve cadena vacía cuando no hay edad que deducir (año actual o
+ * posterior), para que la tarjeta no muestre una edad inventada.
+ */
+export function textoEdadTarjeta(edad: number | null, dias: number): string {
+  if (edad === null) return '';
+  if (dias === 0) return `Está cumpliendo ${pluralAnios(edad)}`;
+  if (dias < 0) return `Cumplió ${pluralAnios(edad)}`;
+  return `Edad: ${pluralAnios(edad)} · Cumplirá: ${pluralAnios(edad + 1)}`;
+}
+
+/**
+ * Frase con la edad para el cuerpo de un aviso, en minúsculas y sin punto,
+ * para poder encajarla dentro de la frase que ya se está componiendo.
+ *
+ * El verbo va en pasado solo cuando el aviso es el de la felicitación tardía,
+ * que es el único que se dispara con el cumpleaños ya atrás.
+ */
+export function textoEdadAviso(edad: number | null, offsetDias: number): string {
+  if (edad === null) return '';
+  const anios = pluralAnios(edad);
+  if (offsetDias > 0) return `Cumplió ${anios}`;
+  if (offsetDias === 0) return `Está cumpliendo ${anios}`;
+  return `Va a cumplir ${anios}`;
+}
+
+/**
+ * Edad que se cumple en el cumpleaños al que pertenece un aviso de
+ * `offsetDias` que se dispara en `instanteAviso`.
+ *
+ * No se puede reutilizar `edadEnProximoCumple` porque la agenda se programa
+ * con antelación y también para el ciclo siguiente: lo que debe decir el
+ * aviso es la edad de ese cumpleaños concreto, no la que tiene la persona hoy.
+ *
+ * Devuelve `null` si el año guardado no permite deducir ninguna edad.
+ */
+export function edadEnCumpleDelAviso(
+  fecha: string,
+  instanteAviso: Date,
+  offsetDias: number,
+  anioDesconocido = false,
+): number | null {
+  if (anioDesconocido) return null;
+  const { anio } = parseFechaCumple(fecha);
+  // El cumpleaños al que pertenece el aviso es `offsetDias` días antes del
+  // instante en que se dispara.
+  const cumple = new Date(instanteAviso);
+  cumple.setDate(cumple.getDate() - offsetDias);
+  if (anio > cumple.getFullYear()) return null;
+  return cumple.getFullYear() - anio;
+}
+
+/** "1 año" o "34 años". */
+export function pluralAnios(n: number): string {
+  return `${n} ${n === 1 ? 'año' : 'años'}`;
+}
+
+/**
+ * Día de la semana con la semana empezando en lunes, como se lee un calendario
+ * en español: 0 = lunes ... 6 = domingo.
+ */
+export function indiceDiaSemana(d: Date): number {
+  return (d.getDay() + 6) % 7;
+}
+
+/**
+ * Último valor de "días para el cumpleaños" que sigue dentro de la semana en
+ * curso. Domingo da 0 (hoy es el último día) y lunes da 6 (el domingo cierra
+ * la semana a seis días vista).
+ *
+ * Se calcula como `6 - índice` porque el domingo tiene índice 6, y no con un
+ * módulo: `(7 - 0) % 7` daría 0 en lunes, que es justo el error que separaba
+ * "esta semana" de "la próxima".
+ */
+export function diasHastaFinDeSemana(ahora: Date = new Date()): number {
+  return 6 - indiceDiaSemana(ahora);
+}
+
+/** En qué semana cae un cumpleaños, para agruparlo en el resumen de la lista. */
+export type SemanaCumple = 'hoy' | 'esta' | 'proxima' | 'masAdelante';
+
+/**
+ * Agrupa un cumpleaños por semana natural: la semana va de lunes a domingo.
+ *
+ * "Esta semana" incluye hoy y llega hasta el domingo, y "la próxima" es la que
+ * va del lunes al domingo siguientes. Contar los próximos siete días no es lo
+ * mismo: si hoy es lunes, el lunes siguiente está a siete días y no es de esta
+ * semana.
+ */
+export function semanaDelCumple(dias: number, ahora: Date = new Date()): SemanaCumple {
+  if (dias === 0) return 'hoy';
+  const fin = diasHastaFinDeSemana(ahora);
+  if (dias <= fin) return 'esta';
+  if (dias <= fin + 7) return 'proxima';
+  return 'masAdelante';
 }
 
 /** Texto legible de "dentro de N días". */

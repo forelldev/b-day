@@ -6,11 +6,18 @@ import {
   OFFSETS_SOLO_HOY,
   cumpleanerosParaCelebrar,
   necesitaReconstruirAgenda,
+  diasHastaFinDeSemana,
+  indiceDiaSemana,
+  semanaDelCumple,
+  textoEdadAviso,
+  textoEdadTarjeta,
   zonaHorariaActual,
   cumpleEnAnio,
   cumpleHoyPeroHoraPasada,
   diasDelMes,
   diasParaCumple,
+  edadDeducible,
+  edadEnCumpleDelAviso,
   edadEnProximoCumple,
   edadActual,
   esBisiesto,
@@ -144,7 +151,7 @@ test('edadActual no anticipa la edad del próximo cumpleaños', () => {
 });
 
 test('la edad que se muestra y la que se cumplirá son consecutivas', () => {
-  // Lo que la lista pinta es "23 años · Cumplirá 24": la edad de hoy y la del
+  // Lo que la lista pinta es "Edad: 23 años · Cumplirá: 24 años": la edad de hoy y la del
   // próximo cumpleaños, que siempre es una mayor.
   const hoy = new Date(2026, 9, 2);
   const edad = edadActual('2003-04-11', hoy);
@@ -153,7 +160,7 @@ test('la edad que se muestra y la que se cumplirá son consecutivas', () => {
 });
 
 test('un niño que cumple un año da 0 y 1', () => {
-  // La tarjeta pinta "0 años · Cumplirá 1 año": el segundo número es el único
+  // La tarjeta pinta "Edad: 0 años · Cumplirá: 1 año": el segundo número es el único
   // que va en singular, y sale de sumar uno a la edad de hoy.
   const anio = new Date().getFullYear() - 1;
   const hoy = new Date(2026, 5, 15); // después de su cumpleaños de junio
@@ -170,16 +177,33 @@ test('edadActual respeta el cambio de año', () => {
   assert.equal(edadActual('1990-01-01', new Date(2026, 0, 1, 10, 0)), 36);
 });
 
-test('edadActual devuelve null si el año guardado no sirve', () => {
-  // Año actual o posterior: quien lo anotó no conocía el año real, así que la
-  // edad que saldría sería inventada. Se prefiere no mostrar nada.
-  assert.equal(edadActual('2026-03-12', new Date(2026, 2, 1, 10, 0)), null);
+test('un bebé nacido este año tiene una edad real de 0 años', () => {
+  // El año igual al actual ya no se descarta: un bebé que nació este año
+  // cumple años de verdad, y ese 0 no es un dato inventado. Lo que marca el
+  // cumpleaños sin año es la casilla, no la cifra.
+  assert.equal(edadActual('2026-03-12', new Date(2026, 2, 1, 10, 0)), 0);
+  assert.equal(edadActual('2026-01-05', new Date(2026, 5, 1, 10, 0)), 0);
+  // Después de su cumpleaños, ya va por 1.
+  assert.equal(edadActual('2026-01-05', new Date(2027, 5, 1, 10, 0)), 1);
+});
+
+test('solo un año posterior a hoy es un dato imposible', () => {
+  // Nadie puede nacer en 2027 estando en 2026, así que ahí sí no hay edad.
   assert.equal(edadActual('2030-03-12', new Date(2026, 2, 1, 10, 0)), null);
-  // Por el mismo motivo, un bebé nacido este año tampoco muestra edad: no hay
-  // forma de distinguirlo de una fecha de relleno.
-  assert.equal(edadActual('2026-01-05', new Date(2026, 5, 1, 10, 0)), null);
+  assert.equal(edadActual('2027-01-05', new Date(2026, 11, 1, 10, 0)), null);
   // En cuanto el año es pasado, la edad vuelve a ser fiable.
   assert.equal(edadActual('2025-01-05', new Date(2026, 5, 1, 10, 0)), 1);
+});
+
+test('la casilla de año desconocido es lo que apaga la edad, no la cifra', () => {
+  // Es la clave de todo el cambio: con la misma fecha guardada, "nació este año"
+  // y "no sé el año" se comportan distinto según la casilla.
+  const bebe = '2026-01-05';
+  const hoy = new Date(2026, 5, 1, 10, 0);
+  assert.equal(edadDeducible(bebe, false, hoy), 0);
+  assert.equal(edadDeducible(bebe, true, hoy), null);
+  assert.equal(textoEdadTarjeta(edadDeducible(bebe, false, hoy), 5), 'Edad: 0 años · Cumplirá: 1 año');
+  assert.equal(textoEdadTarjeta(edadDeducible(bebe, true, hoy), 5), '');
 });
 
 test('edadActual aguanta el 29 de febrero', () => {
@@ -484,4 +508,168 @@ test('los avisos no dependen de la zona: solo de la hora local', () => {
   assert.equal(aviso.getHours(), 9);
   assert.equal(aviso.getMinutes(), 0);
   assert.equal(aviso.getDate(), 4);
+});
+
+test('la tarjeta escribe la edad con etiquetas y dos puntos cuando falta más de un día', () => {
+  // Texto exacto de Main. Va con etiquetas para que no se confunda la edad de
+  // hoy con la del próximo cumpleaños.
+  assert.equal(textoEdadTarjeta(23, 5), 'Edad: 23 años · Cumplirá: 24 años');
+  assert.equal(textoEdadTarjeta(0, 5), 'Edad: 0 años · Cumplirá: 1 año');
+  assert.equal(textoEdadTarjeta(34, 2), 'Edad: 34 años · Cumplirá: 35 años');
+});
+
+test('si cumple hoy la tarjeta no dice "Cumplirá" sino "Está cumpliendo"', () => {
+  // El día del cumpleaños `edad` ya es la que se cumple, así que no lleva +1:
+  // "Está cumpliendo 24 años" y no "Está cumpliendo 25 años".
+  assert.equal(textoEdadTarjeta(24, 0), 'Está cumpliendo 24 años');
+  assert.equal(textoEdadTarjeta(1, 0), 'Está cumpliendo 1 año');
+  assert.ok(!textoEdadTarjeta(24, 0).includes('Cumplirá'));
+});
+
+test('si el cumpleaños fue ayer la tarjeta lo dice en pasado', () => {
+  // Solo el resumen cuenta hacia atrás (`dias` negativo), pero el texto tiene
+  // que ser coherente si algún día la lista también lo hace.
+  assert.equal(textoEdadTarjeta(24, -1), 'Cumplió 24 años');
+  assert.equal(textoEdadTarjeta(24, -3), 'Cumplió 24 años');
+});
+
+test('sin edad que deducir la tarjeta no escribe nada', () => {
+  // Año actual o posterior: la edad sería inventada, así que no se imprime.
+  assert.equal(textoEdadTarjeta(null, 5), '');
+  assert.equal(textoEdadTarjeta(null, 0), '');
+  assert.equal(textoEdadTarjeta(null, -1), '');
+});
+
+test('en cualquier edad la tarjeta imprime la de hoy y la siguiente', () => {
+  // Cualquier edad: la segunda cifra de la tarjeta es la primera más uno.
+  for (const edad of [0, 1, 17, 23, 64, 99]) {
+    const texto = textoEdadTarjeta(edad, 5);
+    assert.match(texto, new RegExp(`^Edad: ${edad} `));
+    assert.ok(texto.includes(`Cumplirá: ${edad + 1}`), `falta Cumplirá: ${edad + 1} en ${texto}`);
+  }
+});
+
+test('sin año de nacimiento la tarjeta no puede mostrar edad ni "cumplirá"', () => {
+  const ahora = new Date(2026, 9, 2);
+  // Año real conocido: la edad y el "cumplirá" salen.
+  assert.equal(textoEdadTarjeta(edadDeducible('2000-05-15', false, ahora), 5), 'Edad: 26 años · Cumplirá: 27 años');
+  // Mismo día y mes, pero marcado como desconocido: no sale nada, para no
+  // inventar un número.
+  assert.equal(textoEdadTarjeta(edadDeducible('2026-05-15', true, ahora), 5), '');
+});
+
+test('la frase del aviso concuerda con el momento del cumpleaños', () => {
+  // Offset negativo = el cumpleaños está por venir; 0 = hoy; positivo = ya pasó.
+  assert.equal(textoEdadAviso(24, -2), 'Va a cumplir 24 años');
+  assert.equal(textoEdadAviso(24, -1), 'Va a cumplir 24 años');
+  assert.equal(textoEdadAviso(24, 0), 'Está cumpliendo 24 años');
+  assert.equal(textoEdadAviso(24, 1), 'Cumplió 24 años');
+  assert.equal(textoEdadAviso(1, 1), 'Cumplió 1 año');
+  assert.equal(textoEdadAviso(null, 0), '');
+});
+
+test('la edad del aviso es la del cumpleaños al que pertenece, no la de hoy', () => {
+  // La agenda se programa con antelación y también para el ciclo siguiente,
+  // así que el aviso del año que viene tiene que decir la edad de ese año.
+  // Nace en 2000: el aviso de 2026 habla de 26 y el de 2027 de 27.
+  const deEsteAnio = edadEnCumpleDelAviso('2000-05-15', new Date(2026, 4, 15, 9, 0), 0);
+  const delAnioQueViene = edadEnCumpleDelAviso('2000-05-15', new Date(2027, 4, 15, 9, 0), 0);
+  assert.equal(deEsteAnio, 26);
+  assert.equal(delAnioQueViene, 27);
+});
+
+test('el aviso de ayer usa la edad del cumpleaños que acaba de pasar', () => {
+  // El aviso del offset +1 se dispara un día después del cumpleaños: retroceder
+  // un día desde el aviso devuelve el cumpleaños y su edad correcta.
+  const edad = edadEnCumpleDelAviso('2000-05-15', new Date(2026, 4, 16, 9, 0), 1);
+  assert.equal(edad, 26);
+});
+
+test('sin año deducible el aviso se queda sin edad en vez de inventarla', () => {
+  // La casilla de año desconocido apaga la edad aunque la cifra sea válida.
+  assert.equal(edadEnCumpleDelAviso('2000-05-15', new Date(2026, 4, 15, 9, 0), 0, true), null);
+  // Un año posterior al del cumpleaños es imposible, así que tampoco hay edad:
+  // un cumple guardado en 2031 no puede ser el de 2026.
+  assert.equal(edadEnCumpleDelAviso('2031-05-15', new Date(2026, 4, 15, 9, 0), 0), null);
+  // Nacido este año, el cumpleaños de 0 años también es real.
+  assert.equal(edadEnCumpleDelAviso('2026-05-15', new Date(2026, 4, 15, 9, 0), 0), 0);
+  // Un cumple de 2026 en 2027 sí vale 1 año: es un bebé que ya pasó su
+  // cumpleaños de 0 años.
+  assert.equal(edadEnCumpleDelAviso('2026-05-15', new Date(2027, 4, 15, 9, 0), 0), 1);
+});
+
+// --- Semanas naturales: lunes a domingo --------------------------------------
+// Las fechas de abajo están comprobadas: el 5 de octubre de 2026 es lunes y el
+// 4 es domingo.
+
+test('la semana empieza en lunes y termina en domingo', () => {
+  assert.equal(indiceDiaSemana(new Date(2026, 9, 5)), 0); // lunes
+  assert.equal(indiceDiaSemana(new Date(2026, 9, 6)), 1); // martes
+  assert.equal(indiceDiaSemana(new Date(2026, 9, 1)), 3); // jueves
+  assert.equal(indiceDiaSemana(new Date(2026, 9, 4)), 6); // domingo
+});
+
+test('la semana en curso cierra en su domingo', () => {
+  // El valor es el último día que sigue dentro de la semana, no la cantidad de
+  // días que faltan: desde el lunes el domingo está a seis días vista.
+  assert.equal(diasHastaFinDeSemana(new Date(2026, 9, 5)), 6); // lunes -> domingo
+  assert.equal(diasHastaFinDeSemana(new Date(2026, 9, 1)), 3); // jueves -> domingo
+  assert.equal(diasHastaFinDeSemana(new Date(2026, 9, 4)), 0); // domingo: hoy es el último
+});
+
+test('hoy, mañana, el domingo y el lunes: 3 en esta semana y 1 en la próxima', () => {
+  // El caso que destapó el fallo, con el lunes 5 de octubre de 2026: hoy lunes,
+  // mañana martes, el domingo 11 y el lunes 12 siguiente.
+  const lunes = new Date(2026, 9, 5);
+  assert.equal(semanaDelCumple(0, lunes), 'hoy');
+  assert.equal(semanaDelCumple(1, lunes), 'esta');    // martes
+  assert.equal(semanaDelCumple(6, lunes), 'esta');    // domingo 11
+  assert.equal(semanaDelCumple(7, lunes), 'proxima'); // lunes 12
+
+  // Repartidos: hoy cuenta una vez y el resto de la semana dos, de modo que
+  // esta semana natural son tres personas (lunes, martes y domingo).
+  const cuenta = { hoy: 0, esta: 0, proxima: 0, masAdelante: 0 };
+  for (const dias of [0, 1, 6, 7]) cuenta[semanaDelCumple(dias, lunes)] += 1;
+  assert.equal(cuenta.hoy, 1);
+  assert.equal(cuenta.esta, 2);
+  assert.equal(cuenta.proxima, 1);
+  assert.equal(cuenta.hoy + cuenta.esta, 3, 'esta semana natural son tres');
+});
+
+test('siete días no es una semana: desde el lunes, el siguiente va a la próxima', () => {
+  // El fallo original era contar `dias > 0 && dias <= 7`, que metía en esta
+  // semana el lunes que viene y se saltaba a quien cumple hoy.
+  const lunes = new Date(2026, 9, 5);
+  assert.equal(semanaDelCumple(7, lunes), 'proxima');
+  for (let d = 8; d <= 60; d += 7) {
+    assert.notEqual(semanaDelCumple(d, lunes), 'esta', `día ${d} no es de esta semana`);
+  }
+});
+
+test('cada día de la semana cae donde le toca', () => {
+  // Reparto completo desde un lunes, semana a semana, sin huecos ni solapes.
+  const lunes = new Date(2026, 9, 5);
+  for (let d = 0; d <= 13; d += 1) {
+    const esperado = d === 0 ? 'hoy' : d <= 6 ? 'esta' : d <= 13 ? 'proxima' : 'masAdelante';
+    assert.equal(semanaDelCumple(d, lunes), esperado, `día ${d}`);
+  }
+  assert.equal(semanaDelCumple(14, lunes), 'masAdelante');
+});
+
+test('quien cumple hoy se separa de "hoy" sin salirse de su semana', () => {
+  // Desde el domingo solo queda hoy; el lunes siguiente ya es la próxima semana.
+  const domingo = new Date(2026, 9, 4);
+  assert.equal(semanaDelCumple(0, domingo), 'hoy');
+  assert.equal(semanaDelCumple(1, domingo), 'proxima');
+  assert.equal(semanaDelCumple(7, domingo), 'proxima');
+  assert.equal(semanaDelCumple(8, domingo), 'masAdelante');
+});
+
+test('nadie se queda sin clasificar: todo cae en alguna semana o más adelante', () => {
+  const hoy = new Date(2026, 9, 1);
+  for (const dias of [0, 1, 2, 3, 4, 7, 8, 14, 30, 100, 365]) {
+    const semana = semanaDelCumple(dias, hoy);
+    assert.ok(['hoy', 'esta', 'proxima', 'masAdelante'].includes(semana), `día ${dias}: ${semana}`);
+  }
+  assert.equal(semanaDelCumple(400, hoy), 'masAdelante');
 });
