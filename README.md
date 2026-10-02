@@ -323,6 +323,7 @@ SDK de Android y un dispositivo conectado por USB con depuración activada.
 | `npm run lint` | ESLint |
 | `npm run typecheck` | TypeScript, app y tests |
 | `npm test` | Suite de tests |
+| `npm run version` | Sube `version` y `versionCode`; obligatorio antes de cada compilación |
 
 ---
 
@@ -359,14 +360,52 @@ npx eas-cli build -p android --profile preview
 
 | Perfil | Para qué |
 |---|---|
-| `preview` | APK instalable, para probar en el móvil |
+| `preview` | APK instalable, para probar en el móvil y para distribuir |
 | `production` | APK de distribución |
 | `development` | Development build con cliente de desarrollo |
+
+El perfil `preview` es el que se usa tanto para las pruebas como para generar la APK que se sube a
+UpToDate. No lleva `autoIncrement` a propósito: EAS no lo admite con `app.config.ts` (la CLI no
+puede editar un archivo que exporta una función), así que el número se sube a mano con
+[`npm run version`](#subir-la-versión) antes de cada compilación.
 
 El build se puede cancelar desde la web o con `npx eas-cli build:cancel <id>`.
 
 Al terminar, el enlace de descarga aparece en
 [expo.dev/accounts/forelldev/projects/cumpleanos-apk](https://expo.dev/accounts/forelldev/projects/cumpleanos-apk/builds).
+
+Los enlaces de descarga caducan a los 30 días. Para una versión que se va a subir a una tienda,
+descarga la APK en cuanto termine el build.
+
+### Subir la versión
+
+Cada APK lleva dos números: `version` (la que se ve, tipo `1.0.1`) y `versionCode` (un entero que
+Android usa por debajo). **Android nunca deja bajar el `versionCode`**: si instalas encima una APK
+con un número menor, el sistema la rechaza con `INSTALL_FAILED_VERSION_DOWNGRADE` y el error no
+explica el motivo.
+
+Para compilaciones el número se sube a mano, con el script de abajo, antes de generar la APK. Es un
+paso obligatorio: si dos APK se compilan con el mismo `versionCode`, no hay forma de distinguirlas
+para quien ya tiene la app instalada.
+
+```bash
+npm run version            # 1.0.0 -> 1.0.1
+npm run version -- --minor # 1.0.0 -> 1.1.0
+npm run version -- --major # 1.0.0 -> 2.0.0
+npm run version -- --dry-run
+```
+
+El script actualiza `version` y `versionCode` a la vez, en `app.config.ts` y en `package.json`, y
+siempre sube el `versionCode` en uno. EAS lee el número de `app.config.ts` porque `eas.json` tiene
+`appVersionSource: 'local'`, así que no hay dos sitios que puedan desincronizarse.
+
+Ejecútalo **antes** de cada compilación distribuible.
+
+**Instalar encima conserva los datos.** La base de datos vive en el espacio privado de la app, así
+que los cumpleaños se mantienen mientras no se desinstale. En UpToDate, quien ya tiene la app
+instalada puede actualizar sin perder nada, y quien la instala por primera vez empieza vacío. Si
+alguna vez hay que desinstalar para poder instalar, entonces sí se pierden: Android rechaza el
+reemplazo cuando cambia la clave de firma, y con EAS la clave se mantiene entre compilaciones.
 
 ---
 

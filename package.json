@@ -39,7 +39,8 @@
     "android": "expo run:android",
     "lint": "expo lint",
     "test": "node --test --experimental-strip-types tests/*.test.ts",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
+    "version": "node --experimental-strip-types scripts/version.ts"
   },
   "private": true
 }

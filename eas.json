@@ -6,6 +6,12 @@
   "build": {
     "preview": {
       "distribution": "internal",
+      // Perfil usado para probar en el móvil y para subir la APK a UpToDate.
+      // `autoIncrement` NO es posible aquí: EAS lo rechaza con "autoIncrement
+      // option is not supported when using app.config.js" porque
+      // `app.config.ts` exporta una función y la CLI no puede editarlo para
+      // subir el número. Por eso el versionCode se sube a mano, con
+      // `npm run version` antes de cada compilación.
       "android": {
         "buildType": "apk"
       }
