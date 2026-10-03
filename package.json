@@ -28,7 +28,6 @@
   "devDependencies": {
     "@types/node": "^26.6.3",
     "@types/react": "~19.2.2",
-    "eas-cli": "24.8.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
     "react-dom": "19.2.3",

@@ -355,8 +355,16 @@ Con [EAS Build](https://docs.expo.dev/eas/), en la nube. No hace falta Java ni A
 en el equipo.
 
 ```bash
-npx eas-cli build -p android --profile preview
+npx eas-cli@latest build -p android --profile preview
 ```
+
+> `eas-cli` **no** está en `devDependencies` a propósito, y hay que seguir usándolo con `npx`.
+> En su versión actual arrastra una `@expo/require-utils` antigua cuyo peer de TypeScript es `^5.0.0`,
+> incompatible con el TypeScript 6 del proyecto. Al compilar, EAS ejecuta `npm ci`, que a diferencia de
+> `npm install` no admite resolver peers sobre la marcha: aborta con
+> `Missing: typescript@5.9.3 from lock file` en cuanto el lock no incluye esa copia anidada. Como
+> `eas-cli` solo se usa desde el terminal y la compilación la hace el servidor de EAS, quitarla del
+> proyecto es la solución limpia.
 
 | Perfil | Para qué |
 |---|---|
@@ -369,7 +377,7 @@ UpToDate. No lleva `autoIncrement` a propósito: EAS no lo admite con `app.confi
 puede editar un archivo que exporta una función), así que el número se sube a mano con
 [`npm run version`](#subir-la-versión) antes de cada compilación.
 
-El build se puede cancelar desde la web o con `npx eas-cli build:cancel <id>`.
+El build se puede cancelar desde la web o con `npx eas-cli@latest build:cancel <id>`.
 
 Al terminar, el enlace de descarga aparece en
 [expo.dev/accounts/forelldev/projects/cumpleanos-apk](https://expo.dev/accounts/forelldev/projects/cumpleanos-apk/builds).
